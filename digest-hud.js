@@ -1,12 +1,11 @@
-angular.module('digestHud', [])
+/* global angular:true $:true */
 
-.provider('digestHud', ['$provide', function($provide) {
-  'use strict';
+var DigestHud = function($provide) {
 
-  function WatchTiming(key) {
+  var WatchTiming = DigestHud.prototype.WatchTiming = function(key) {
     this.key = key;
     this.reset();
-  }
+  };
 
   WatchTiming.prototype.reset = function() {
     this.watch = 0;
@@ -19,7 +18,6 @@ angular.module('digestHud', [])
   };
 
   WatchTiming.prototype.startCycle = function(start) {
-    timingStack.push(this);
     this.cycleStart = start;
     this.cycleTotal = 0;
     this.subTotal = 0;
@@ -31,16 +29,19 @@ angular.module('digestHud', [])
     this.subTotal = 0;
   };
 
-  WatchTiming.prototype.endCycle = function() {
-    if (!this.cycleStart) return;
+  WatchTiming.prototype.endCycle = function(hud) {
+    if (!this.cycleStart) {
+        return;
+    }
     var duration = Date.now() - this.cycleStart;
     this.overhead += duration - this.cycleTotal;
     this.cycleStart = null;
-    timingStack.pop();
-    if (timingStack.length) {
-      timingStack[timingStack.length - 1].subTotal += duration;
+
+    hud.timingStack.pop();
+    if (hud.timingStack.length) {
+      hud.timingStack[hud.timingStack.length - 1].subTotal += duration;
     } else {
-      overheadTiming.overhead -= duration;
+      hud.overheadTiming.overhead -= duration;
     }
   };
 
@@ -387,6 +388,7 @@ angular.module('digestHud', [])
       if (!actualExpression) return;
       if (!inDigest) return actualExpression.apply(this, arguments);
       var start = Date.now();
+      timingStack.push(this);
       timing.startCycle(start);
       try {
         return actualExpression.apply(this, arguments);
@@ -416,5 +418,6 @@ angular.module('digestHud', [])
   }
 
   this.$get = function() {};
-}]);
+};
 
+angular.module('digestHud', []).provider('digestHud', ['$provide', DigestHud]);
