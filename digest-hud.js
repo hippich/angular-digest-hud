@@ -2,7 +2,7 @@
 
 (function(global) {
 
-    var DigestHud = function($provide) {
+    var DigestHud = global.DigestHud = function($provide) {
 
       var WatchTiming = DigestHud.prototype.WatchTiming = function(key) {
         this.key = key;
