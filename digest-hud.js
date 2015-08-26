@@ -1,10 +1,26 @@
 /* global angular:true $:true */
 
+// Rules below here temporaly, and should be taken care of eventually
+/* eslint no-use-before-define:0 curly:0 */
+
 (function(global) {
 
     var DigestHud = global.DigestHud = function($provide) {
+      var digestHud = this;
 
-      var WatchTiming = DigestHud.prototype.WatchTiming = function(key) {
+      digestHud.digestTimings = [];
+      digestHud.watchTimings = {};
+      digestHud.inDigest = false;
+      digestHud.hudElement = false;
+      digestHud.defaultHudPosition = 'bottom right';
+      digestHud.customHudPosition = false;
+      digestHud.$parse = false;
+      digestHud.numTopWatches = 20;
+      digestHud.numDigestStats = 25;
+      digestHud.timingStack = [];
+      digestHud.summaryElement = false;
+
+      var WatchTiming = digestHud.WatchTiming = function(key) {
         this.key = key;
         this.reset();
       };
@@ -38,11 +54,11 @@
         var duration = Date.now() - this.cycleStart;
         this.overhead += duration - this.cycleTotal;
         this.cycleStart = null;
-        timingStack.pop();
-        if (timingStack.length) {
-          timingStack[timingStack.length - 1].subTotal += duration;
+        digestHud.timingStack.pop();
+        if (digestHud.timingStack.length) {
+          digestHud.timingStack[digestHud.timingStack.length - 1].subTotal += duration;
         } else {
-          overheadTiming.overhead -= duration;
+          digestHud.overheadTiming.overhead -= duration;
         }
       };
 
@@ -51,47 +67,42 @@
       };
 
       WatchTiming.prototype.format = function(grandTotal) {
-        return percentage(this.total / grandTotal) + '\u2003(' +
-          percentage(this.watch / grandTotal) + ' + ' +
-          percentage(this.handle / grandTotal) + ' + ' +
-          percentage(this.overhead / grandTotal) +
+        return digestHud.percentage(this.total / grandTotal) + '\u2003(' +
+          digestHud.percentage(this.watch / grandTotal) + ' + ' +
+          digestHud.percentage(this.handle / grandTotal) + ' + ' +
+          digestHud.percentage(this.overhead / grandTotal) +
           ')\u2003' + this.key;
       };
 
-      function flushTimingCycle() {
-        if (timingStack.length) {
-            timingStack[timingStack.length - 1].endCycle();
+      digestHud.flushTimingCycle = function() {
+        if (digestHud.timingStack.length) {
+            digestHud.timingStack[digestHud.timingStack.length - 1].endCycle();
         }
-      }
+      };
 
-      var digestTimings = [];
-      var watchTimings = {};
-      var timingStack;
-      var overheadTiming = createTiming('$$ng-overhead');
-      var digestHud = this;
-      var inDigest = false;
-      var hudElement;
-      var defaultHudPosition = 'bottom right';
-      var customHudPosition;
-      var $parse;
+      digestHud.resetTimings = function() {
+        digestHud.digestTimings.length = 0;
 
-      this.numTopWatches = 20;
-      this.numDigestStats = 25;
+        Object.keys(digestHud.watchTimings).map(function(k){
+          return digestHud.watchTimings[k];
+        }).forEach(function(watchTiming) {
+          watchTiming.reset();
+        });
+      };
 
-      this.enable = function() {
-        var toggle = false;
+      digestHud.showHud = function() {
         var detailsText = '';
 
-        hudElement = $('<div></div>');
+        digestHud.hudElement = $('<div></div>');
         var buttonsElement = $(
           '<div>' +
           '<span id="digestHud-refresh">refresh</span> &bull; ' +
           '<span id="digestHud-reset">reset</span> ' +
-          '</div>').appendTo(hudElement);
-        var summaryElement = $('<div></div>').appendTo(hudElement);
-        var detailsElement = $('<div></div>').appendTo(hudElement);
+          '</div>').appendTo(digestHud.hudElement);
+        digestHud.summaryElement = $('<div></div>').appendTo(digestHud.hudElement);
+        var detailsElement = $('<div></div>').appendTo(digestHud.hudElement);
         var showDetails = false;
-        hudElement.on('click', function() {
+        digestHud.hudElement.on('click', function() {
           showDetails = !showDetails;
           buttonsElement.toggle(showDetails);
           detailsElement.toggle(showDetails);
@@ -100,17 +111,17 @@
           }
         });
 
-        hudElement.on('copy', function(ev) {
+        digestHud.hudElement.on('copy', function(ev) {
           ev.originalEvent.clipboardData.setData('text/plain', detailsText);
           ev.preventDefault();
         });
 
         buttonsElement.find('#digestHud-refresh').on('click', refreshDetails);
-        buttonsElement.find('#digestHud-reset').on('click', resetTimings);
+        buttonsElement.find('#digestHud-reset').on('click', digestHud.resetTimings);
         buttonsElement.on('click', function(ev) {ev.stopPropagation();});
 
-        hudElement.on('mousedown mouseup click', function(ev) {ev.stopPropagation();});
-        hudElement.css({
+        digestHud.hudElement.on('mousedown mouseup click', function(ev) {ev.stopPropagation();});
+        digestHud.hudElement.css({
           position: 'fixed',
           backgroundColor: 'rgba(0, 0, 0, 0.65)',
           color: 'white',
@@ -120,7 +131,7 @@
           zIndex: '1000000'
         });
 
-        this.setHudPosition(customHudPosition || defaultHudPosition);
+        digestHud.setHudPosition(digestHud.customHudPosition || digestHud.defaultHudPosition);
 
         buttonsElement.css({
           float: 'right',
@@ -135,13 +146,13 @@
           maxWidth: '50em',
           display: 'none'
         });
-        $('body').append(hudElement);
+        $('body').append(digestHud.hudElement);
 
         function refreshDetails() {
           var grandTotal = 0, topTotal = 0;
 
-          var topWatchTimings = Object.keys(watchTimings).map(function(k){
-            return watchTimings[k];
+          var topWatchTimings = Object.keys(digestHud.watchTimings).map(function(k){
+            return digestHud.watchTimings[k];
           }).map(function(timing) {
             timing.sum(); grandTotal += timing.total;
             return timing;
@@ -169,22 +180,16 @@
             .css({borderBottom: '1px solid'}).appendTo(detailsElement);
           detailsElement.append(rows);
           var footer = 'Top ' + topWatchTimings.length + ' items account for ' +
-            percentage(topTotal / grandTotal) + ' of ' + grandTotal + 'ms of digest processing time.';
+            digestHud.percentage(topTotal / grandTotal) + ' of ' + grandTotal + 'ms of digest processing time.';
           $('<div></div>').text(footer).appendTo(detailsElement);
           detailsText = 'Total  Watch   Work Overhead  Function\n' + lines.map(function(text) {
             return text.replace(/[ \n]+/g, ' ');
           }).join('\n') + '\n' + footer + '\n';
         }
+      };
 
-        function resetTimings() {
-          digestTimings = [];
-
-          Object.keys(watchTimings).map(function(k){
-            return watchTimings[k];
-          }).forEach(function(watchTiming) {
-            watchTiming.reset();
-          });
-        }
+      digestHud.enable = function() {
+        var toggle = false;
 
         $provide.decorator('$rootScope', ['$delegate', function($delegate) {
           var proto = Object.getPrototypeOf($delegate);
@@ -206,47 +211,50 @@
 
           function instrumentedDigest() {
             // jshint validthis:true
-            timingStack = [];
-            this.$$postDigest(flushTimingCycle);
+            digestHud.timingStack.length = 0;
+            this.$$postDigest(digestHud.flushTimingCycle);
             var start = Date.now();
-            inDigest = true;
+            digestHud.inDigest = true;
             try {
               originalDigest.call(this);
             } finally {
-              inDigest = false;
+              digestHud.inDigest = false;
             }
             var duration = Date.now() - start;
-            overheadTiming.overhead += duration;
+            digestHud.overheadTiming.overhead += duration;
             toggle = !toggle;
-            digestTimings.push(duration);
-            if (digestTimings.length > digestHud.numDigestStats) digestTimings.shift();
-            var len = digestTimings.length;
-            var sorted = digestTimings.slice().sort();
+            digestHud.digestTimings.push(duration);
+            if (digestHud.digestTimings.length > digestHud.numDigestStats) digestHud.digestTimings.shift();
+            var len = digestHud.digestTimings.length;
+            var sorted = digestHud.digestTimings.slice().sort();
             var median = len % 2 ?
               sorted[(len - 1) / 2] : Math.round((sorted[len / 2] + sorted[len / 2 - 1]) / 2);
             var description =
               'digest ' + sorted[0] + 'ms ' + median + 'ms ' + sorted[len - 1] + 'ms ' +
               (toggle ? '\u25cf' : '\u25cb');
-            summaryElement.text(description);
+
+            if (digestHud.summaryElement) {
+              digestHud.summaryElement.text(description);
+            }
           }
 
           function instrumentedEvalAsync(expression, locals) {
             // jshint validthis:true
-            var timing = createTiming('$evalAsync(' + formatExpression(expression) + ')');
+            var timing = createTiming('$evalAsync(' + digestHud.formatExpression(expression) + ')');
             originalEvalAsync.call(
-              this, wrapExpression(expression, timing, 'handle', true, true), locals);
+              this, digestHud.wrapExpression(expression, timing, 'handle', true, true), locals);
           }
 
           function instrumentedApplyAsync(expression) {
             // jshint validthis:true
-            var timing = createTiming('$applyAsync(' + formatExpression(expression) + ')');
-            originalApplyAsync.call(this, wrapExpression(expression, timing, 'handle', false, true));
+            var timing = createTiming('$applyAsync(' + digestHud.formatExpression(expression) + ')');
+            originalApplyAsync.call(this, digestHud.wrapExpression(expression, timing, 'handle', false, true));
           }
 
           function instrumentedPostDigest(fn) {
             // jshint validthis:true
-            if (timingStack.length) {
-              fn = wrapExpression(fn, timingStack[timingStack.length - 1], 'overhead', true, true);
+            if (digestHud.timingStack.length) {
+              fn = digestHud.wrapExpression(fn, digestHud.timingStack[digestHud.timingStack.length - 1], 'overhead', true, true);
             }
             originalPostDigest.call(this, fn);
           }
@@ -256,22 +264,22 @@
             var watchTimingSet = false;
             if (!watchTiming) {
               // Capture watch timing (and its key) once, before we descend in $$watchDelegates.
-              watchTiming = createTiming(formatExpression(watchExpression));
+              watchTiming = createTiming(digestHud.formatExpression(watchExpression));
               watchTimingSet = true;
             }
             try {
               if (angular.isString(watchExpression)) {
-                if (!$parse) {
-                  angular.injector(['ng']).invoke(['$parse', function(parse) {$parse = parse;}]);
+                if (!digestHud.$parse) {
+                  angular.injector(['ng']).invoke(['$parse', function(parse) {digestHud.$parse = parse;}]);
                 }
-                watchExpression = $parse(watchExpression);
+                watchExpression = digestHud.$parse(watchExpression);
               }
               if (watchExpression && watchExpression.$$watchDelegate) {
                 return originalWatch.call(this, watchExpression, listener, objectEquality);
               } else {
                 return originalWatch.call(
-                  this, wrapExpression(watchExpression, watchTiming, 'watch', true, false),
-                  wrapListener(listener, watchTiming), objectEquality);
+                  this, digestHud.wrapExpression(watchExpression, watchTiming, 'watch', true, false),
+                  digestHud.wrapListener(listener, watchTiming), objectEquality);
               }
             } finally {
               if (watchTimingSet) watchTiming = null;
@@ -285,7 +293,7 @@
               // $watchGroup delegates to $watch for each expression, so just make sure to set the group's
               // aggregate key as the override first.
               watchTiming = createTiming(
-                '[' + watchExpressions.map(formatExpression).join(', ') + ']');
+                '[' + watchExpressions.map(digestHud.formatExpression).join(', ') + ']');
               watchTimingSet = true;
             }
             try {
@@ -317,14 +325,14 @@
             // jshint validthis:true
             return originalThen.call(
               this,
-              wrapExpression(
-                onFulfilled, createTiming('$q(' + formatExpression(onFulfilled) + ')'), 'handle',
+              digestHud.wrapExpression(
+                onFulfilled, createTiming('$q(' + digestHud.formatExpression(onFulfilled) + ')'), 'handle',
                 false, true),
-              wrapExpression(
-                onRejected, createTiming('$q(' + formatExpression(onRejected) + ')'), 'handle',
+              digestHud.wrapExpression(
+                onRejected, createTiming('$q(' + digestHud.formatExpression(onRejected) + ')'), 'handle',
                 false, true),
-              wrapExpression(
-                progressBack, createTiming('$q(' + formatExpression(progressBack) + ')'), 'handle',
+              digestHud.wrapExpression(
+                progressBack, createTiming('$q(' + digestHud.formatExpression(progressBack) + ')'), 'handle',
                 false, true)
             );
           }
@@ -333,11 +341,11 @@
             // jshint validthis:true
             return originalFinally.call(
               this,
-              wrapExpression(
-                callback, createTiming('$q(' + formatExpression(callback) + ')'), 'handle',
+              digestHud.wrapExpression(
+                callback, createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
                 false, true),
-              wrapExpression(
-                progressBack, createTiming('$q(' + formatExpression(callback) + ')'), 'handle',
+              digestHud.wrapExpression(
+                progressBack, createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
                 false, true)
             );
           }
@@ -346,15 +354,15 @@
         }]);
 
         var originalBind = angular.bind;
-        angular.bind = function(self, fn, args) {
+        angular.bind = function(self, fn/*, args*/) {
           var result = originalBind.apply(this, arguments);
-          result.exp = formatExpression(fn);
+          result.exp = digestHud.formatExpression(fn);
           return result;
         };
       };
 
-      this.setHudPosition = function(position) {
-        if (hudElement) {
+      digestHud.setHudPosition = function(position) {
+        if (digestHud.hudElement) {
           // reset all to defaults
           var styles = {
             top: 'auto',
@@ -362,49 +370,49 @@
             bottom: 'auto',
             left: 'auto'
           };
-          position = position ? '' + position : defaultHudPosition;
+          position = position ? '' + position : digestHud.defaultHudPosition;
           position.split(' ').map(function(prop) { styles[prop] = 0; });
-          hudElement.css(styles);
+          digestHud.hudElement.css(styles);
         } else {
           // save and apply on enabled
-          customHudPosition = position;
+          digestHud.customHudPosition = position;
         }
       };
 
-      function percentage(value) {
+      digestHud.percentage = function(value) {
         if (value >= 1) return (value * 100).toFixed(1) + '%';
         return ('\u2007\u2007' + (value * 100).toFixed(1) + '%').slice(-5);
-      }
+      };
 
-      function formatExpression(watchExpression) {
+      digestHud.formatExpression = function(watchExpression) {
         if (!watchExpression) return '';
         if (angular.isString(watchExpression)) return watchExpression;
         if (angular.isString(watchExpression.exp)) return watchExpression.exp;
         if (watchExpression.name) return 'function ' + watchExpression.name + '() {\u2026}';
         return watchExpression.toString();
-      }
+      };
 
-      function wrapExpression(expression, timing, counter, flushCycle, endCycle) {
+      digestHud.wrapExpression = function(expression, timing, counter, flushCycle, endCycle) {
         if (!expression && !flushCycle) return expression;
-        if (!$parse) angular.injector(['ng']).invoke(['$parse', function(parse) {$parse = parse;}]);
-        var actualExpression = angular.isString(expression) ? $parse(expression) : expression;
+        if (!digestHud.$parse) angular.injector(['ng']).invoke(['$parse', function(parse) {digestHud.$parse = parse;}]);
+        var actualExpression = angular.isString(expression) ? digestHud.$parse(expression) : expression;
         return function instrumentedExpression() {
-          if (flushCycle) flushTimingCycle();
-          if (!actualExpression) return;
-          if (!inDigest) return actualExpression.apply(this, arguments);
+          if (flushCycle) digestHud.flushTimingCycle();
+          if (!actualExpression) return null;
+          if (!digestHud.inDigest) return actualExpression.apply(this, arguments);
           var start = Date.now();
-          timingStack.push(this);
+          digestHud.timingStack.push(timing);
           timing.startCycle(start);
           try {
-            return actualExpression.apply(this, arguments);
+            return actualExpression.apply(digestHud, arguments);
           } finally {
             timing.countTime(counter, Date.now() - start);
             if (endCycle) timing.endCycle();
           }
         };
-      }
+      };
 
-      function wrapListener(listener, timing) {
+      digestHud.wrapListener = function(listener, timing) {
         if (!listener) return listener;
         return function instrumentedListener() {
           var start = Date.now();
@@ -414,16 +422,22 @@
             timing.countTime('handle', Date.now() - start);
           }
         };
-      }
+      };
 
       function createTiming(key) {
-        var timing = watchTimings[key];
-        if (!timing) timing = watchTimings[key] = new WatchTiming(key);
+        var timing = digestHud.watchTimings[key];
+        if (!timing) timing = digestHud.watchTimings[key] = new WatchTiming(key);
         return timing;
       }
 
-      this.$get = function() {};
+      digestHud.$get = function() {
+          return digestHud;
+      };
+      digestHud.overheadTiming = createTiming('$$ng-overhead');
     };
 
-    angular.module('digestHud', []).provider('digestHud', ['$provide', DigestHud]);
+    angular.module('digestHud', []).provider('digestHud', ['$provide', function($provide) {
+      global.digestHud = new DigestHud($provide);
+      return global.digestHud;
+    }]);
 })(this);
