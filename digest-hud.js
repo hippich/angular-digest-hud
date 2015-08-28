@@ -19,6 +19,8 @@
       digestHud.numDigestStats = 25;
       digestHud.timingStack = [];
       digestHud.summaryElement = false;
+      digestHud.original = {};
+      digestHud.enabled = false;
 
       var WatchTiming = digestHud.WatchTiming = function(key) {
         this.key = key;
@@ -191,14 +193,22 @@
       digestHud.enable = function() {
         var toggle = false;
 
+        if (this.enabled) {
+            return;
+        }
+
+        this.enabled = true;
+
         $provide.decorator('$rootScope', ['$delegate', function($delegate) {
-          var proto = Object.getPrototypeOf($delegate);
-          var originalDigest = proto.$digest;
-          var originalEvalAsync = proto.$evalAsync;
-          var originalApplyAsync = proto.$applyAsync;
-          var originalPostDigest = proto.$$postDigest;
-          var originalWatch = proto.$watch;
-          var originalWatchGroup = proto.$watchGroup;
+          var proto = digestHud.original.$rootScope = Object.getPrototypeOf($delegate);
+
+          digestHud.original.Digest = proto.$digest;
+          digestHud.original.EvalAsync = proto.$evalAsync;
+          digestHud.original.ApplyAsync = proto.$applyAsync;
+          digestHud.original.PostDigest = proto.$$postDigest;
+          digestHud.original.Watch = proto.$watch;
+          digestHud.original.WatchGroup = proto.$watchGroup;
+
           // $watchCollection delegates to $watch, no extra processing necessary
           proto.$digest = instrumentedDigest;
           proto.$evalAsync = instrumentedEvalAsync;
@@ -216,7 +226,7 @@
             var start = Date.now();
             digestHud.inDigest = true;
             try {
-              originalDigest.call(this);
+              digestHud.original.Digest.call(this);
             } finally {
               digestHud.inDigest = false;
             }
@@ -241,14 +251,14 @@
           function instrumentedEvalAsync(expression, locals) {
             // jshint validthis:true
             var timing = createTiming('$evalAsync(' + digestHud.formatExpression(expression) + ')');
-            originalEvalAsync.call(
+            digestHud.original.EvalAsync.call(
               this, digestHud.wrapExpression(expression, timing, 'handle', true, true), locals);
           }
 
           function instrumentedApplyAsync(expression) {
             // jshint validthis:true
             var timing = createTiming('$applyAsync(' + digestHud.formatExpression(expression) + ')');
-            originalApplyAsync.call(this, digestHud.wrapExpression(expression, timing, 'handle', false, true));
+            digestHud.original.ApplyAsync.call(this, digestHud.wrapExpression(expression, timing, 'handle', false, true));
           }
 
           function instrumentedPostDigest(fn) {
@@ -256,7 +266,7 @@
             if (digestHud.timingStack.length) {
               fn = digestHud.wrapExpression(fn, digestHud.timingStack[digestHud.timingStack.length - 1], 'overhead', true, true);
             }
-            originalPostDigest.call(this, fn);
+            digestHud.original.PostDigest.call(this, fn);
           }
 
           function instrumentedWatch(watchExpression, listener, objectEquality) {
@@ -275,9 +285,9 @@
                 watchExpression = digestHud.$parse(watchExpression);
               }
               if (watchExpression && watchExpression.$$watchDelegate) {
-                return originalWatch.call(this, watchExpression, listener, objectEquality);
+                return digestHud.original.Watch.call(this, watchExpression, listener, objectEquality);
               } else {
-                return originalWatch.call(
+                return digestHud.original.Watch.call(
                   this, digestHud.wrapExpression(watchExpression, watchTiming, 'watch', true, false),
                   digestHud.wrapListener(listener, watchTiming), objectEquality);
               }
@@ -297,7 +307,7 @@
               watchTimingSet = true;
             }
             try {
-              return originalWatchGroup.call(this, watchExpressions, listener);
+              return digestHud.original.WatchGroup.call(this, watchExpressions, listener);
             } finally {
               if (watchTimingSet) watchTiming = null;
             }
@@ -315,15 +325,15 @@
         }]);
 
         $provide.decorator('$q', ['$delegate', function($delegate) {
-          var proto = Object.getPrototypeOf($delegate.defer().promise);
-          var originalThen = proto.then;
-          var originalFinally = proto.finally;
+          var proto = digestHud.original.$q = Object.getPrototypeOf($delegate.defer().promise);
+          digestHud.original.Then = proto.then;
+          digestHud.original.Finally = proto.finally;
           proto.then = instrumentedThen;
           proto.finally = instrumentedFinally;
 
           function instrumentedThen(onFulfilled, onRejected, progressBack) {
             // jshint validthis:true
-            return originalThen.call(
+            return digestHud.original.Then.call(
               this,
               digestHud.wrapExpression(
                 onFulfilled, createTiming('$q(' + digestHud.formatExpression(onFulfilled) + ')'), 'handle',
@@ -339,7 +349,7 @@
 
           function instrumentedFinally(callback, progressBack) {
             // jshint validthis:true
-            return originalFinally.call(
+            return digestHud.original.Finally.call(
               this,
               digestHud.wrapExpression(
                 callback, createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
@@ -353,12 +363,37 @@
           return $delegate;
         }]);
 
-        var originalBind = angular.bind;
+        digestHud.original.Bind = angular.bind;
         angular.bind = function(self, fn/*, args*/) {
-          var result = originalBind.apply(this, arguments);
+          var result = digestHud.original.Bind.apply(this, arguments);
           result.exp = digestHud.formatExpression(fn);
           return result;
         };
+      };
+
+      digestHud.disable = function() {
+          if (! this.enabled) {
+              return;
+          }
+
+          if (digestHud.original.$rootScope) {
+              var proto = digestHud.original.$rootScope;
+              proto.$digest = digestHud.original.Digest;
+              proto.$evalAsync = digestHud.original.EvalAsync;
+              proto.$applyAsync = digestHud.original.ApplyAsync;
+              proto.$$postDigest = digestHud.original.PostDigest;
+              proto.$watch = digestHud.original.Watch;
+              proto.$watchGroup = digestHud.original.WatchGroup;
+          }
+
+          if (digestHud.original.$q) {
+              digestHud.original.$q.then = digestHud.original.Then;
+              digestHud.original.$q.finally = digestHud.original.Finally;
+          }
+
+          angular.bind = digestHud.original.Bind;
+
+          this.enabled = false;
       };
 
       digestHud.setHudPosition = function(position) {
@@ -437,7 +472,6 @@
     };
 
     angular.module('digestHud', []).provider('digestHud', ['$provide', function($provide) {
-      global.digestHud = new DigestHud($provide);
-      return global.digestHud;
+      return new DigestHud($provide);
     }]);
 })(this);
