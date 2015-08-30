@@ -250,14 +250,14 @@
 
           function instrumentedEvalAsync(expression, locals) {
             // jshint validthis:true
-            var timing = createTiming('$evalAsync(' + digestHud.formatExpression(expression) + ')');
+            var timing = digestHud.createTiming('$evalAsync(' + digestHud.formatExpression(expression) + ')');
             digestHud.original.EvalAsync.call(
               this, digestHud.wrapExpression(expression, timing, 'handle', true, true), locals);
           }
 
           function instrumentedApplyAsync(expression) {
             // jshint validthis:true
-            var timing = createTiming('$applyAsync(' + digestHud.formatExpression(expression) + ')');
+            var timing = digestHud.createTiming('$applyAsync(' + digestHud.formatExpression(expression) + ')');
             digestHud.original.ApplyAsync.call(this, digestHud.wrapExpression(expression, timing, 'handle', false, true));
           }
 
@@ -274,7 +274,7 @@
             var watchTimingSet = false;
             if (!watchTiming) {
               // Capture watch timing (and its key) once, before we descend in $$watchDelegates.
-              watchTiming = createTiming(digestHud.formatExpression(watchExpression));
+              watchTiming = digestHud.createTiming(digestHud.formatExpression(watchExpression));
               watchTimingSet = true;
             }
             try {
@@ -302,7 +302,7 @@
             if (!watchTiming) {
               // $watchGroup delegates to $watch for each expression, so just make sure to set the group's
               // aggregate key as the override first.
-              watchTiming = createTiming(
+              watchTiming = digestHud.createTiming(
                 '[' + watchExpressions.map(digestHud.formatExpression).join(', ') + ']');
               watchTimingSet = true;
             }
@@ -336,13 +336,13 @@
             return digestHud.original.Then.call(
               this,
               digestHud.wrapExpression(
-                onFulfilled, createTiming('$q(' + digestHud.formatExpression(onFulfilled) + ')'), 'handle',
+                onFulfilled, digestHud.createTiming('$q(' + digestHud.formatExpression(onFulfilled) + ')'), 'handle',
                 false, true),
               digestHud.wrapExpression(
-                onRejected, createTiming('$q(' + digestHud.formatExpression(onRejected) + ')'), 'handle',
+                onRejected, digestHud.createTiming('$q(' + digestHud.formatExpression(onRejected) + ')'), 'handle',
                 false, true),
               digestHud.wrapExpression(
-                progressBack, createTiming('$q(' + digestHud.formatExpression(progressBack) + ')'), 'handle',
+                progressBack, digestHud.createTiming('$q(' + digestHud.formatExpression(progressBack) + ')'), 'handle',
                 false, true)
             );
           }
@@ -352,10 +352,10 @@
             return digestHud.original.Finally.call(
               this,
               digestHud.wrapExpression(
-                callback, createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
+                callback, digestHud.createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
                 false, true),
               digestHud.wrapExpression(
-                progressBack, createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
+                progressBack, digestHud.createTiming('$q(' + digestHud.formatExpression(callback) + ')'), 'handle',
                 false, true)
             );
           }
@@ -459,16 +459,16 @@
         };
       };
 
-      function createTiming(key) {
+      digestHud.createTiming = function(key) {
         var timing = digestHud.watchTimings[key];
         if (!timing) timing = digestHud.watchTimings[key] = new WatchTiming(key);
         return timing;
-      }
+      };
 
       digestHud.$get = function() {
           return digestHud;
       };
-      digestHud.overheadTiming = createTiming('$$ng-overhead');
+      digestHud.overheadTiming = digestHud.createTiming('$$ng-overhead');
     };
 
     angular.module('digestHud', []).provider('digestHud', ['$provide', function($provide) {
