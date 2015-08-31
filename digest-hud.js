@@ -427,49 +427,82 @@
         return watchExpression.toString();
       };
 
-      digestHud.wrapExpression = function(expression, timing, counter, flushCycle, endCycle) {
-        if (!expression && !flushCycle) return expression;
-        if (!digestHud.$parse) angular.injector(['ng']).invoke(['$parse', function(parse) {digestHud.$parse = parse;}]);
-        var actualExpression = angular.isString(expression) ? digestHud.$parse(expression) : expression;
-        return function instrumentedExpression() {
-          if (flushCycle) digestHud.flushTimingCycle();
-          if (!actualExpression) return null;
-          if (!digestHud.inDigest) return actualExpression.apply(this, arguments);
-          var start = Date.now();
-          digestHud.timingStack.push(timing);
-          timing.startCycle(start);
-          try {
-            return actualExpression.apply(digestHud, arguments);
-          } finally {
-            timing.countTime(counter, Date.now() - start);
-            if (endCycle) timing.endCycle();
-          }
-        };
-      };
-
-      digestHud.wrapListener = function(listener, timing) {
-        if (!listener) return listener;
-        return function instrumentedListener() {
-          var start = Date.now();
-          try {
-            return listener.apply(this, arguments);
-          } finally {
-            timing.countTime('handle', Date.now() - start);
-          }
-        };
-      };
-
-      digestHud.createTiming = function(key) {
-        var timing = digestHud.watchTimings[key];
-        if (!timing) timing = digestHud.watchTimings[key] = new WatchTiming(key);
-        return timing;
-      };
-
-      digestHud.$get = function() {
-          return digestHud;
-      };
       digestHud.overheadTiming = digestHud.createTiming('$$ng-overhead');
     };
+
+    DigestHud.prototype.wrapExpression = function(expression, timing, counter, flushCycle, endCycle) {
+      var digestHud = this;
+
+      if (!expression && !flushCycle) {
+        return expression;
+      }
+
+      if (! this.$parse) {
+        angular.injector(['ng']).invoke(['$parse', function(parse) { digestHud.$parse = parse; }]);
+      }
+
+      var actualExpression = angular.isString(expression) ? this.$parse(expression) : expression;
+
+      return function instrumentedExpression() {
+        if (flushCycle) {
+          digestHud.flushTimingCycle();
+        }
+
+        if (! actualExpression) {
+          return null;
+        }
+
+        if (! digestHud.inDigest) {
+          return actualExpression.apply(this, arguments);
+        }
+
+        var start = Date.now();
+        digestHud.timingStack.push(timing);
+        timing.startCycle(start);
+
+        try {
+          return actualExpression.apply(digestHud, arguments);
+        } finally {
+          timing.countTime(counter, Date.now() - start);
+
+          if (endCycle) {
+            timing.endCycle();
+          }
+        }
+      };
+    };
+
+    DigestHud.prototype.wrapListener = function(listener, timing) {
+      if (! listener) {
+        return listener;
+      }
+
+      return function instrumentedListener() {
+        var start = Date.now();
+
+        try {
+          return listener.apply(this, arguments);
+        } finally {
+          timing.countTime('handle', Date.now() - start);
+        }
+      };
+    };
+
+
+    DigestHud.prototype.$get = function() {
+      return this;
+    };
+
+    DigestHud.prototype.createTiming = function(key) {
+      var timing = this.watchTimings[key];
+
+      if (! timing) {
+        timing = this.watchTimings[key] = new this.WatchTiming(key);
+      }
+
+      return timing;
+    };
+
 
     angular.module('digestHud', []).provider('digestHud', ['$provide', function($provide) {
       return new DigestHud($provide);
