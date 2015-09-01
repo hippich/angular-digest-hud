@@ -35,18 +35,21 @@
         this.cycleTotal = 0;
         this.cycleStart = null;
         this.subTotal = 0;
+        this.cycles = 0;
       };
 
       WatchTiming.prototype.startCycle = function(start) {
         this.cycleStart = start;
         this.cycleTotal = 0;
         this.subTotal = 0;
+        this.cycles = 0;
       };
 
       WatchTiming.prototype.countTime = function(counter, duration) {
         this[counter] += duration - this.subTotal;
         this.cycleTotal += duration;
         this.subTotal = 0;
+        this.cycles++;
       };
 
       WatchTiming.prototype.endCycle = function() {
