@@ -42,7 +42,6 @@
         this.cycleStart = start;
         this.cycleTotal = 0;
         this.subTotal = 0;
-        this.cycles = 0;
       };
 
       WatchTiming.prototype.countTime = function(counter, duration) {
@@ -76,7 +75,7 @@
           digestHud.percentage(this.watch / grandTotal) + ' + ' +
           digestHud.percentage(this.handle / grandTotal) + ' + ' +
           digestHud.percentage(this.overhead / grandTotal) +
-          ')\u2003' + this.key;
+          ')\u2003' + ' (' + this.cycles + ') ' + this.key;
       };
 
       digestHud.flushTimingCycle = function() {
