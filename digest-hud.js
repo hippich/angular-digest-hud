@@ -17,6 +17,7 @@
       digestHud.$parse = false;
       digestHud.numTopWatches = 20;
       digestHud.numDigestStats = 25;
+      digestHud.numDigests = 0;
       digestHud.timingStack = [];
       digestHud.summaryElement = false;
       digestHud.original = {};
@@ -86,6 +87,7 @@
 
       digestHud.resetTimings = function() {
         digestHud.digestTimings.length = 0;
+        digestHud.numDigests = 0;
 
         Object.keys(digestHud.watchTimings).map(function(k){
           return digestHud.watchTimings[k];
@@ -184,7 +186,7 @@
             .css({borderBottom: '1px solid'}).appendTo(detailsElement);
           detailsElement.append(rows);
           var footer = 'Top ' + topWatchTimings.length + ' items account for ' +
-            digestHud.percentage(topTotal / grandTotal) + ' of ' + grandTotal + 'ms of digest processing time.';
+            digestHud.percentage(topTotal / grandTotal) + ' of ' + grandTotal + 'ms of ' + digestHud.numDigests + ' digests processing time.';
           $('<div></div>').text(footer).appendTo(detailsElement);
           detailsText = 'Total  Watch   Work Overhead  Function\n' + lines.map(function(text) {
             return text.replace(/[ \n]+/g, ' ');
@@ -223,6 +225,7 @@
 
           function instrumentedDigest() {
             // jshint validthis:true
+            digestHud.numDigests++;
             digestHud.timingStack.length = 0;
             this.$$postDigest(digestHud.flushTimingCycle);
             var start = Date.now();
