@@ -99,7 +99,7 @@
       digestHud.showHud = function() {
         var detailsText = '';
 
-        digestHud.hudElement = $('<div></div>');
+        digestHud.hudElement = $('<div id="digest-hud-element"></div>');
         var buttonsElement = $(
           '<div>' +
           '<span id="digestHud-refresh">refresh</span> &bull; ' +
