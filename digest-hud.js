@@ -466,7 +466,7 @@
         timing.startCycle(start);
 
         try {
-          return actualExpression.apply(digestHud, arguments);
+          return actualExpression && actualExpression.apply && actualExpression.apply(digestHud, arguments);
         } finally {
           timing.countTime(counter, Date.now() - start);
 
